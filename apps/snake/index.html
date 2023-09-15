@@ -1,0 +1,55 @@
+<html>
+
+<head>
+    <style>
+        #snake {
+            font-family: "Courier New", monospace;
+            color: #F0DB4F;
+            background: #323330;
+            display: inline-block;
+            white-space: pre;
+            line-height: 9px;
+            font-size: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="snake"></div>
+</body>
+<script>
+    var snake = 
+    function(a,b,c,d,e){a.unshift(b);c^a[0]&&a.pop();for(b=d*d;b--;)e=[e]+"■ "[!~a.indexOf(b)&b!=c]+["\n"[b%d]];return~a.indexOf(a[0],1)||e};
+    
+    (function(){
+        var size = 60;
+      
+        var oldstep, step = -1;
+        document.onkeydown = function(e) {
+            var keyCode = (e || window.event).keyCode,
+                nextstep = [1,size,-1,-size][keyCode-37];
+            step = (nextstep == -oldstep) ? oldstep : nextstep;
+        }
+        
+        var center, apple = center = size*(size*.5+.5);
+        var f,snakie = (f=function(c,i){return i?f(c,--i).concat(c):[]})(center,5);
+        
+        (function() {
+            var oldlength = snakie.length, next = (snakie[0]+(oldstep=step)+size*size)%(size*size),
+                game = snake(snakie, next, apple, size);
+            if (typeof game === "number") {
+                document.getElementById( "snake" ).innerHTML += (f=function(i){return i?f(--i)+" ":""})(size*.5-5) + "Game Over : " + snakie.length;
+            } else {
+                document.getElementById( "snake" ).innerHTML = game;
+                setTimeout(arguments.callee, 100);
+            }
+            if (snakie.length !== oldlength) {
+                while (~snakie.indexOf(apple)) {
+                    apple = Math.floor(Math.random()*size*size);
+                }
+            }
+        })();
+        
+    })();        
+</script>
+</html>
