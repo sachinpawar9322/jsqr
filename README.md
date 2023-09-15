@@ -1,2 +1,2 @@
-# jsqr
+# JSQR
 Javascript Apps + QR codes 
