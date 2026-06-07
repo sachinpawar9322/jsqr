@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;height:100vh;overflow:hidden}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const CV = document.getElementById('c');
+const X = CV.getContext('2d');
+const N = 4;
+const TITLE = 0, PLAY = 1, WIN = 2, DEAD = 3;
+let grid, score, best, state, won;
+
+function loadBest() { try { return +localStorage['2048hi'] || 0; } catch(e) { return 0; } }
+function saveBest(v) { try { localStorage['2048hi'] = v; } catch(e) {} }
+best = loadBest();
+
+function addTile(g) {
+  const empty = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!g[r][c]) empty.push([r, c]);
+  if (!empty.length) return;
+  const [r, c] = empty[Math.random() * empty.length | 0];
+  g[r][c] = Math.random() < 0.9 ? 2 : 4;
+}
+
+function startGame() {
+  grid = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  score = 0; won = false; state = PLAY;
+  addTile(grid); addTile(grid);
+}
+
+function slide(line) {
+  let a = line.filter(v => v), gained = 0;
+  for (let i = 0; i < a.length - 1; i++) {
+    if (a[i] === a[i+1]) { a[i] *= 2; gained += a[i]; a.splice(i+1, 1); }
+  }
+  while (a.length < N) a.push(0);
+  return { row: a, gained };
+}
+
+function move(dir) {
+  // 0=left 1=right 2=up 3=down
+  let moved = false, gained = 0;
+  for (let i = 0; i < N; i++) {
+    let line = dir < 2 ? [...grid[i]] : grid.map(r => r[i]);
+    if (dir === 1 || dir === 3) line.reverse();
+    const { row, gained: g } = slide(line);
+    gained += g;
+    if (dir === 1 || dir === 3) row.reverse();
+    for (let j = 0; j < N; j++) {
+      const r = dir < 2 ? i : j, c = dir < 2 ? j : i;
+      if (grid[r][c] !== row[j]) moved = true;
+      grid[r][c] = row[j];
+    }
+  }
+  if (moved) {
+    score += gained;
+    if (score > best) { best = score; saveBest(best); }
+    addTile(grid);
+    if (!won && grid.some(r => r.includes(2048))) { won = true; state = WIN; }
+    else if (!canMove()) state = DEAD;
+  }
+}
+
+function canMove() {
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (!grid[r][c]) return true;
+    if (c < N-1 && grid[r][c] === grid[r][c+1]) return true;
+    if (r < N-1 && grid[r][c] === grid[r+1][c]) return true;
+  }
+  return false;
+}
+
+// tile colors indexed by log2(value): index 1=2, 2=4 ... 11=2048
+const TC = ['#3a3a5c','#eee4da','#ede0c8','#f2b179','#f59563','#f67c5f','#f65e3b','#edcf72','#edcc61','#edc850','#edc53f','#edc22e'];
+
+let W, H, SZ, PAD, BOARD, ox, oy, HUD;
+
+function resize() {
+  W = CV.width = innerWidth;
+  H = CV.height = innerHeight;
+  HUD = Math.min(H * 0.13, 64) | 0;
+  const avail = Math.min(W * 0.97, H - HUD) | 0;
+  PAD = Math.max(5, avail * 0.025) | 0;
+  SZ = ((avail - PAD * 5) / 4) | 0;
+  BOARD = SZ * 4 + PAD * 5;
+  ox = (W - BOARD) >> 1;
+  oy = HUD + ((H - HUD - BOARD) >> 1);
+}
+addEventListener('resize', resize);
+resize();
+
+function drawTile(r, c, v) {
+  const x = ox + PAD + c * (SZ + PAD);
+  const y = oy + PAD + r * (SZ + PAD);
+  X.fillStyle = v ? TC[Math.log2(v)] : TC[0];
+  X.beginPath(); X.roundRect(x, y, SZ, SZ, SZ * 0.1); X.fill();
+  if (!v) return;
+  const fs = (v < 100 ? SZ * 0.42 : v < 1000 ? SZ * 0.33 : SZ * 0.25) | 0;
+  X.fillStyle = v <= 4 ? '#776e65' : '#f9f6f0';
+  X.font = `bold ${fs}px monospace`;
+  X.textAlign = 'center'; X.textBaseline = 'middle';
+  X.fillText(v, x + SZ / 2, y + SZ / 2);
+}
+
+function drawHUD() {
+  const cy = HUD / 2;
+  const ts = Math.min(HUD * 0.52, 30) | 0;
+  X.textAlign = 'center'; X.textBaseline = 'middle';
+  X.font = `bold ${ts}px monospace`;
+  X.fillStyle = '#edc22e';
+  X.shadowColor = '#edc22e'; X.shadowBlur = 14;
+  X.fillText('2048', ox + BOARD * 0.22, cy);
+  X.shadowBlur = 0;
+  const ss = Math.max(11, ts * 0.6) | 0;
+  X.font = `${ss}px monospace`;
+  X.fillStyle = '#aaa';
+  X.fillText(`SCORE  ${score}`, ox + BOARD * 0.67, cy - ss * 0.6);
+  X.fillStyle = '#555';
+  X.fillText(`BEST  ${best}`, ox + BOARD * 0.67, cy + ss * 0.85);
+}
+
+function drawOverlay(title, sub, color) {
+  X.fillStyle = 'rgba(0,0,0,0.8)';
+  X.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  X.textAlign = 'center'; X.textBaseline = 'middle';
+  const ts = Math.min(W, H) * 0.1 | 0;
+  X.font = `bold ${ts}px monospace`;
+  X.shadowColor = color; X.shadowBlur = 28;
+  X.fillStyle = color;
+  X.fillText(title, cx, cy - ts);
+  X.shadowBlur = 0;
+  const ss = Math.max(13, ts * 0.35) | 0;
+  X.font = `${ss}px monospace`;
+  X.fillStyle = '#888';
+  X.fillText(sub, cx, cy + ss * 0.5);
+  X.fillText('▶  tap or press any key', cx, cy + ss * 2.5);
+}
+
+function render() {
+  X.fillStyle = '#1a1a2e';
+  X.fillRect(0, 0, W, H);
+  if (state === TITLE) { drawOverlay('2048', 'merge tiles to reach 2048!', '#edc22e'); return; }
+  drawHUD();
+  X.fillStyle = '#2a2a4a';
+  X.beginPath(); X.roundRect(ox, oy, BOARD, BOARD, BOARD * 0.04); X.fill();
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) drawTile(r, c, grid[r][c]);
+  if (state === WIN) drawOverlay('YOU WIN!', `score: ${score}`, '#edc22e');
+  else if (state === DEAD) drawOverlay('GAME OVER', `score: ${score}`, '#f65e3b');
+}
+
+const KDIR = {37:0,65:0,39:1,68:1,38:2,87:2,40:3,83:3};
+addEventListener('keydown', e => {
+  if (state !== PLAY) { startGame(); return; }
+  const d = KDIR[e.keyCode];
+  if (d !== undefined) { e.preventDefault(); move(d); }
+});
+
+let tS = null;
+addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (state !== PLAY) { startGame(); return; }
+  tS = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+}, {passive:false});
+addEventListener('touchend', e => {
+  e.preventDefault();
+  if (!tS) return;
+  const dx = e.changedTouches[0].clientX - tS.x;
+  const dy = e.changedTouches[0].clientY - tS.y;
+  tS = null;
+  if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return;
+  move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 0) : (dy > 0 ? 3 : 2));
+}, {passive:false});
+
+state = TITLE;
+function loop() { requestAnimationFrame(loop); render(); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

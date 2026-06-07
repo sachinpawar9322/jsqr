@@ -21,7 +21,7 @@ QR_MAX = 2953  # version 40, error_correction=L, byte mode capacity
 def generateQR(file: str, source_file: str = None) -> str:
     data = open(file, 'rb').read()
     compressed = gzip.compress(data, compresslevel=9)
-    encoded = base64.b64encode(compressed).decode('ascii')
+    encoded = base64.urlsafe_b64encode(compressed).decode('ascii')
     embed_url = f'{REPO_BASE}/index.html#{encoded}'
 
     if len(embed_url) <= QR_MAX:

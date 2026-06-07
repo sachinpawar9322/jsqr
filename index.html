@@ -8,6 +8,8 @@
 <script>
 var h = location.hash.slice(1);
 if(h){
+  try{
+  h = h.replace(/-/g,'+').replace(/_/g,'/');
   var bin = atob(h);
   var bytes = new Uint8Array(bin.length);
   for(var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -16,13 +18,17 @@ if(h){
   w.write(bytes); w.close();
   var reader = ds.readable.getReader();
   var chunks = [];
+  function showErr(e){document.body.style='background:#fff;color:#000;padding:16px;font:16px monospace';document.body.textContent='Error: '+e;}
   (async function(){
-    for(;;){ var r = await reader.read(); if(r.done) break; chunks.push(r.value); }
-    var len = chunks.reduce(function(a,b){ return a + b.length; }, 0);
-    var buf = new Uint8Array(len); var off = 0;
-    chunks.forEach(function(c){ buf.set(c, off); off += c.length; });
-    document.open(); document.write(new TextDecoder().decode(buf)); document.close();
+    try{
+      for(;;){ var r = await reader.read(); if(r.done) break; chunks.push(r.value); }
+      var len = chunks.reduce(function(a,b){ return a + b.length; }, 0);
+      var buf = new Uint8Array(len); var off = 0;
+      chunks.forEach(function(c){ buf.set(c, off); off += c.length; });
+      document.open(); document.write(new TextDecoder().decode(buf)); document.close();
+    }catch(e){showErr(e);}
   })();
+  }catch(e){showErr(e);}
 }
 </script>
 </body>
