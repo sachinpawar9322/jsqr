@@ -18,13 +18,13 @@ def generateQR(file:str)->str:
     f=open(file)
     data = f.read()
     ascii=data.encode('utf-8')
-    encoded=f'data:text/html;base64, {base64.b64encode(ascii).decode("utf-8")}'
-    print(encoded)
+    encoded=f'https://raw.githack.com/sachinpawar9322/jsqr/master/index.html#{base64.b64encode(ascii).decode("utf-8")}'
+    print(f'encoded = {encoded}')
     img = qrcode.make(encoded)
     type(img)  
     outputPath='/'.join(file.split('/')[:-1])+'/qr.png'
     img.save(outputPath)
-    outputPath
+    return outputPath
 
 
 def minifyToQR(inputPath:str)->str:
@@ -35,5 +35,6 @@ def minifyToQR(inputPath:str)->str:
 
 if __name__ == "__main__":
     path=sys.argv[1]
-    qrPath=generateQR(path)
+    qrPath=minifyToQR(path)
+    print(f'Source: {path} \n Result: {qrPath}')
     
