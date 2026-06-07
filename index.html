@@ -3,74 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>
-    *{box-sizing:border-box;margin:0}
-    body{background:#111;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden}
-    video{width:100%;max-height:90vh;object-fit:cover}
-    #status{padding:.75em 1em;font-size:1.1em;text-align:center;width:100%}
-    canvas{display:none}
-  </style>
 </head>
 <body>
-<div id="status">Requesting camera...</div>
-<video id="v" autoplay playsinline muted></video>
-<canvas id="c"></canvas>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
-var v = document.getElementById('v');
-var c = document.getElementById('c');
-var x = c.getContext('2d');
-var st = document.getElementById('status');
-
-navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
-  .then(function(stream){
-    v.srcObject = stream;
-    v.play();
-    st.textContent = 'Point camera at QR code...';
-    requestAnimationFrame(scan);
-  })
-  .catch(function(e){ st.textContent = 'Camera error: ' + e.message; });
-
-function scan(){
-  if(v.readyState === v.HAVE_ENOUGH_DATA){
-    c.width = v.videoWidth;
-    c.height = v.videoHeight;
-    x.drawImage(v, 0, 0, c.width, c.height);
-    var img = x.getImageData(0, 0, c.width, c.height);
-    var result = jsQR(img.data, img.width, img.height, {inversionAttempts:'dontInvert'});
-    if(result){
-      decode(result.binaryData);
-      return;
-    }
-  }
-  requestAnimationFrame(scan);
-}
-
-async function decode(bytes){
-  try{
-    st.textContent = 'Decoding...';
-    var ds = new DecompressionStream('gzip');
-    var writer = ds.writable.getWriter();
-    writer.write(bytes);
-    writer.close();
-    var reader = ds.readable.getReader();
-    var chunks = [];
-    for(;;){
-      var r = await reader.read();
-      if(r.done) break;
-      chunks.push(r.value);
-    }
-    var len = chunks.reduce(function(a,b){return a+b.length;},0);
-    var buf = new Uint8Array(len);
-    var off = 0;
-    chunks.forEach(function(ch){buf.set(ch,off);off+=ch.length;});
-    var html = new TextDecoder().decode(buf);
-    document.open();
-    document.write(html);
-    document.close();
-  }catch(e){
-    st.textContent = 'Error: ' + e.message;
-  }
+var h = location.hash.slice(1);
+if(h){
+  var bin = atob(h);
+  var bytes = new Uint8Array(bin.length);
+  for(var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  var ds = new DecompressionStream('gzip');
+  var w = ds.writable.getWriter();
+  w.write(bytes); w.close();
+  var reader = ds.readable.getReader();
+  var chunks = [];
+  (async function(){
+    for(;;){ var r = await reader.read(); if(r.done) break; chunks.push(r.value); }
+    var len = chunks.reduce(function(a,b){ return a + b.length; }, 0);
+    var buf = new Uint8Array(len); var off = 0;
+    chunks.forEach(function(c){ buf.set(c, off); off += c.length; });
+    document.open(); document.write(new TextDecoder().decode(buf)); document.close();
+  })();
 }
 </script>
 </body>

@@ -1,6 +1,7 @@
 import minify_html
 import qrcode
 import gzip
+import base64
 import sys
 
 
@@ -16,16 +17,15 @@ def minify(file: str) -> str:
 def generateQR(file: str) -> str:
     data = open(file, 'rb').read()
     compressed = gzip.compress(data, compresslevel=9)
-    print(f'gzip {len(data)} -> {len(compressed)} bytes ({round(len(compressed)/len(data)*100)}%)')
+    encoded = base64.b64encode(compressed).decode('ascii')
+    print(f'gzip {len(data)} -> {len(compressed)} bytes, base64 -> {len(encoded)} chars')
 
-    qr = qrcode.QRCode(
-        version=40,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=3,
-        border=4,
-    )
-    qr.add_data(compressed, optimize=0)
-    qr.make(fit=False)
+    url = f'https://raw.githack.com/sachinpawar9322/jsqr/master/index.html#{encoded}'
+    print(f'URL length: {len(url)} chars')
+
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_L)
+    qr.add_data(url)
+    qr.make(fit=True)
     img = qr.make_image()
 
     outputPath = '/'.join(file.split('/')[:-1]) + '/qr.png'
