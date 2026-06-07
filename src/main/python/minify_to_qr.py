@@ -14,14 +14,24 @@ def minify(file: str) -> str:
     return outputPath
 
 
-def generateQR(file: str) -> str:
+REPO_BASE = 'https://raw.githack.com/sachinpawar9322/jsqr/master'
+QR_MAX = 2953  # version 40, error_correction=L, byte mode capacity
+
+
+def generateQR(file: str, source_file: str = None) -> str:
     data = open(file, 'rb').read()
     compressed = gzip.compress(data, compresslevel=9)
     encoded = base64.b64encode(compressed).decode('ascii')
-    print(f'gzip {len(data)} -> {len(compressed)} bytes, base64 -> {len(encoded)} chars')
+    embed_url = f'{REPO_BASE}/index.html#{encoded}'
 
-    url = f'https://raw.githack.com/sachinpawar9322/jsqr/master/index.html#{encoded}'
-    print(f'URL length: {len(url)} chars')
+    if len(embed_url) <= QR_MAX:
+        url = embed_url
+        print(f'mode: embed  gzip {len(data)} -> {len(compressed)} -> base64 {len(encoded)} chars  url {len(url)} chars')
+    else:
+        # File too large to embed — link directly to the source file on GitHub
+        ref = source_file or file
+        url = f'{REPO_BASE}/{ref}'
+        print(f'mode: direct  embed would be {len(embed_url)} chars (>{QR_MAX})  using url {len(url)} chars: {url}')
 
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_L)
     qr.add_data(url)
@@ -36,7 +46,7 @@ def generateQR(file: str) -> str:
 
 def minifyToQR(inputPath: str) -> str:
     minifiedPath = minify(inputPath)
-    qrPath = generateQR(minifiedPath)
+    qrPath = generateQR(minifiedPath, source_file=inputPath)
     return qrPath
 
 

@@ -1,38 +1,192 @@
+<!DOCTYPE html>
 <html>
 <head>
-<style>body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh}</style>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; }
+canvas { display: block; }
+</style>
 </head>
 <body>
-<canvas id=c></canvas>
+<canvas id="c"></canvas>
 <script>
-var G=20,x=c.getContext('2d'),s=Math.min(~~((Math.min(innerWidth,innerHeight)-20)/G),20);
-c.width=c.height=G*s;
-var sn,d,nd,fd,pt,ok;
-function ri(){sn=[{x:10,y:10}];d={x:1,y:0};nd=null;fd=ap();pt=0;ok=1}
-function ap(){var a;do a={x:G*Math.random()|0,y:G*Math.random()|0};while(sn.some(q=>q.x==a.x&q.y==a.y));return a}
-onkeydown=e=>{var m=[{x:-1,y:0},{x:0,y:-1},{x:1,y:0},{x:0,y:1}][e.keyCode-37];if(m&&(m.x+d.x||m.y+d.y))nd=m;if(!ok)ri()};
-var tx,ty;
-c.ontouchstart=e=>{e.preventDefault();var t=e.touches[0];tx=t.clientX;ty=t.clientY};
-c.ontouchend=e=>{
-  e.preventDefault();if(!ok){ri();return}
-  var t=e.changedTouches[0],dx=t.clientX-tx,dy=t.clientY-ty;
-  nd=Math.abs(dx)>Math.abs(dy)?{x:dx>0?1:-1,y:0}:{x:0,y:dy>0?1:-1}
+const CV = document.getElementById('c');
+const X = CV.getContext('2d');
+let W, H, S, cols, rows, ox, oy;
+
+function resize() {
+  W = CV.width = innerWidth;
+  H = CV.height = innerHeight;
+  S = Math.max(Math.floor(Math.min(W, H) / 22), 12);
+  cols = Math.floor(W / S);
+  rows = Math.floor(H / S);
+  ox = (W - cols * S) >> 1;
+  oy = (H - rows * S) >> 1;
+}
+addEventListener('resize', resize);
+resize();
+
+const TITLE = 0, PLAY = 1, DEAD = 2;
+let state = TITLE;
+let sn, dir, ndir, food, score, hi, speed, lastTick, newBest;
+
+function loadHi() { try { return +localStorage.snakeHi || 0; } catch(e) { return 0; } }
+function saveHi(v) { try { localStorage.snakeHi = v; } catch(e) {} }
+
+function startGame() {
+  const cx = cols >> 1, cy = rows >> 1;
+  sn = [{x:cx,y:cy},{x:cx-1,y:cy},{x:cx-2,y:cy}];
+  dir = {x:1, y:0};
+  ndir = null;
+  food = spawnFood();
+  score = 0;
+  speed = 130;
+  newBest = false;
+  lastTick = performance.now();
+  state = PLAY;
+}
+
+function spawnFood() {
+  let f;
+  do { f = {x: Math.random() * cols | 0, y: Math.random() * rows | 0}; }
+  while (sn.some(s => s.x === f.x && s.y === f.y));
+  return f;
+}
+
+const DIRS = {
+  37:{x:-1,y:0}, 65:{x:-1,y:0},
+  38:{x:0,y:-1}, 87:{x:0,y:-1},
+  39:{x:1,y:0},  68:{x:1,y:0},
+  40:{x:0,y:1},  83:{x:0,y:1}
 };
-function dr(){
-  var W=G*s;
-  x.fillStyle='#000';x.fillRect(0,0,W,W);
-  x.fillStyle='#f04';x.beginPath();x.arc(fd.x*s+s/2,fd.y*s+s/2,s/2-1,0,6.28);x.fill();
-  sn.forEach((p,j)=>{x.fillStyle=j?'#060':'#0f0';x.fillRect(p.x*s+1,p.y*s+1,s-2,s-2)});
-  x.fillStyle='#0f0';x.font=(s*.7|0)+'px monospace';x.fillText(pt,3,s*.75);
-  if(!ok){
-    x.fillStyle='rgba(0,0,0,.7)';x.fillRect(0,0,W,W);
-    x.textAlign='center';x.fillStyle='#0f0';x.font='bold '+s+'px monospace';
-    x.fillText('GAME OVER',W/2,W/2);
-    x.font=(s*.65|0)+'px monospace';x.fillStyle='#060';
-    x.fillText('tap / enter',W/2,W/2+s*1.2)
+addEventListener('keydown', e => {
+  const d = DIRS[e.keyCode];
+  if (d && state === PLAY && (d.x + dir.x || d.y + dir.y)) ndir = d;
+  if ((e.key === 'Enter' || e.key === ' ') && state !== PLAY) startGame();
+});
+
+let tStart = null;
+addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (state !== PLAY) { startGame(); return; }
+  tStart = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+}, {passive: false});
+addEventListener('touchend', e => {
+  e.preventDefault();
+  if (!tStart || state !== PLAY) return;
+  const dx = e.changedTouches[0].clientX - tStart.x;
+  const dy = e.changedTouches[0].clientY - tStart.y;
+  tStart = null;
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+  const d = Math.abs(dx) > Math.abs(dy) ? {x:dx>0?1:-1,y:0} : {x:0,y:dy>0?1:-1};
+  if (d.x + dir.x || d.y + dir.y) ndir = d;
+}, {passive: false});
+
+function tick() {
+  if (ndir) { dir = ndir; ndir = null; }
+  const head = {
+    x: (sn[0].x + dir.x + cols) % cols,
+    y: (sn[0].y + dir.y + rows) % rows
+  };
+  if (sn.some(s => s.x === head.x && s.y === head.y)) {
+    state = DEAD;
+    if (score > hi) { hi = score; saveHi(hi); newBest = true; }
+    return;
+  }
+  sn.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    food = spawnFood();
+    speed = Math.max(55, speed - 3);
+  } else {
+    sn.pop();
   }
 }
-function tk(){if(ok){if(nd){d=nd;nd=null}var h={x:(sn[0].x+d.x+G)%G,y:(sn[0].y+d.y+G)%G};if(sn.some(q=>q.x==h.x&q.y==h.y))ok=0;else{sn.unshift(h);if(h.x==fd.x&h.y==fd.y){pt++;fd=ap()}else sn.pop()}}dr();setTimeout(tk,100)}
-ri();tk();
+
+let frame = 0;
+
+function drawFood(f) {
+  const pulse = 0.82 + 0.18 * Math.sin(frame * 0.11);
+  const fx = ox + f.x * S + S / 2, fy = oy + f.y * S + S / 2;
+  const fr = S * 0.42 * pulse;
+  X.fillStyle = '#ff3d1a';
+  X.beginPath(); X.arc(fx, fy, fr, 0, Math.PI * 2); X.fill();
+  X.fillStyle = 'rgba(255,190,150,0.75)';
+  X.beginPath(); X.arc(fx - fr * 0.28, fy - fr * 0.28, fr * 0.32, 0, Math.PI * 2); X.fill();
+}
+
+function drawSnake(dead) {
+  const len = Math.max(sn.length - 1, 1);
+  sn.forEach((seg, i) => {
+    const t = i / len;
+    const sx = ox + seg.x * S, sy = oy + seg.y * S;
+    const pad = Math.max(1, S * 0.07);
+    X.fillStyle = `hsl(135,${dead ? 40 : 90}%,${dead ? 18 : Math.round(58 - t * 38)}%)`;
+    X.beginPath(); X.roundRect(sx + pad, sy + pad, S - pad * 2, S - pad * 2, S * 0.32); X.fill();
+  });
+}
+
+function drawHUD() {
+  const hh = Math.max(26, S * 1.1);
+  X.fillStyle = 'rgba(0,0,0,0.55)';
+  X.fillRect(ox, oy, cols * S, hh);
+  const fs = Math.max(11, S * 0.55) | 0;
+  X.font = `bold ${fs}px monospace`;
+  X.textBaseline = 'middle';
+  X.fillStyle = '#0f0';
+  X.textAlign = 'left';
+  X.fillText(score, ox + S * 0.35, oy + hh / 2);
+  X.fillStyle = '#333';
+  X.textAlign = 'right';
+  X.fillText(`BEST  ${hi}`, ox + cols * S - S * 0.35, oy + hh / 2);
+}
+
+function drawOverlay(title, lines) {
+  X.fillStyle = 'rgba(0,0,0,0.84)';
+  X.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  X.textAlign = 'center';
+  X.textBaseline = 'middle';
+  const ts = Math.min(W, H) * 0.09 | 0;
+  X.font = `bold ${ts}px monospace`;
+  X.shadowColor = '#0f0';
+  X.shadowBlur = 28;
+  X.fillStyle = '#0f0';
+  X.fillText(title, cx, cy - ts * 1.3);
+  X.shadowBlur = 0;
+  const ls = Math.max(14, ts * 0.38) | 0;
+  X.font = `${ls}px monospace`;
+  lines.forEach((line, i) => {
+    X.fillStyle = (line[0] === '▶' || line[0] === '★') ? '#0f0' : '#555';
+    X.fillText(line, cx, cy + i * ls * 1.55);
+  });
+}
+
+function render(now) {
+  frame++;
+  X.fillStyle = '#000';
+  X.fillRect(0, 0, W, H);
+  if (state !== TITLE) {
+    drawFood(food);
+    drawSnake(state === DEAD);
+    drawHUD();
+  }
+  if (state === TITLE) {
+    drawOverlay('SNAKE', ['arrow keys  or  WASD', 'swipe on mobile', '', '▶  tap or press any key']);
+  } else if (state === DEAD) {
+    drawOverlay('GAME OVER', [`score    ${score}`, newBest ? '★  new best!' : `best     ${hi}`, '', '▶  tap or press enter']);
+  }
+}
+
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (state === PLAY && now - lastTick >= speed) { lastTick += speed; tick(); }
+  render(now);
+}
+
+hi = loadHi();
+requestAnimationFrame(loop);
 </script>
+</body>
 </html>
